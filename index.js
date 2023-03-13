@@ -15,6 +15,7 @@ const port = 5000
 const stockfish = require("stockfish");
 const engine = stockfish();
 const fenregex = "/^([rnbqkpRNBQKP1-8]+\/){7}([rnbqkpRNBQKP1-8]+)\s[bw]\s(-|K?Q?k?q?)\s(-|[a-h][36])\s(0|[1-9][0-9]*)\s([1-9][0-9]*)/"
+//const regex = "/info.*score\s(cp\s-?\d+)/g";
 
 engine.onmessage = function(msg) {
   console.log(msg);
@@ -41,20 +42,19 @@ app.post('/', (request, response) => {
         return;
     }
     // only send response when it is a recommendation
-    if (typeof(msg == "string") && msg.match("bestmove")) {
+    const regex = /^info depth 20 .* nodes \d+ .*$/;
+    if (typeof(msg == "string") && (msg.match(regex) && !msg.includes("lowerbound") 
+      && !msg.includes("upperbound"))) {
+        //response.send(msg);
         response.send(msg);
     }
-
-    if (typeof(msg == "string") && msg.match("Total evaluation")) {
-        response.send(msg);
-    }//
   }
 
 // run chess engine
   engine.postMessage("ucinewgame");
   engine.postMessage("position fen " + request.body.fen);
-  engine.postMessage("go depth 18");
-  engine.postMessage("eval");//
+  engine.postMessage("go depth 20");
+  //engine.postMessage("eval");//
 });
 
 app.listen(port, (err) => {
@@ -65,5 +65,6 @@ app.listen(port, (err) => {
   console.log(`server is listening on ${port}`)
 })
 
-
+//3rr2k/ppp1q1pp/8/8/2PR4/1QP5/P4PPP/5RK1 w - - 5 23
+//r1bqkb1r/ppp2ppp/2n2n2/3pp1N1/2B1P3/8/PPPP1PPP/RNBQK2R w KQkq - 0 5
 //"stockfish": "^11.0.0"

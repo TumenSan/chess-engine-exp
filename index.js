@@ -15,14 +15,7 @@ app.use(express.json()); // for parsing application/json
 app.use(express.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
 app.use(fenMiddleware);
 
-
-app.get('/', (req, res) => {
-  response.send('post body any fen in /estimation or /bestmove');
-});
-
-app.post('/', (req, res) => {
-  response.send('post body any fen in /estimation or /bestmove');
-});
+// /estimation or /bestmove
 
 app.post('/estimation', (req, res) => {
   let depth = req.body.depth;

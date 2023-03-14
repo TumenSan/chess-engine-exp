@@ -1,6 +1,11 @@
 function fenMiddleware(req, res, next) {
     try {
         let fen = req.body.fen;
+        const fenregex = /^([rnbqkpRNBQKP1-8]+\/){7}([rnbqkpRNBQKP1-8]+)\s[bw]\s(-|K?Q?k?q?)\s(-|[a-h][36])\s(0|[1-9][0-9]*)\s([1-9][0-9]*)/;
+        if(!fen.match(fenregex)){
+            res.status(400).send("Invalid fen string");
+            return;
+        }
 
         let fenCheck = 
         s => [...s].map(c =>                  // for each character 'c' in the FEN string 's':
@@ -30,16 +35,21 @@ function fenMiddleware(req, res, next) {
         k * K - 1 |                         //   do we have exactly one king on each side?
         p > 8 |                             //   no more than 8 black pawns, including promotions?
         P > 8)                              //   no more than 8 white pawns, including promotions?
-
+        
+        /*
         console.log(fenCheck(fen))
 
         if(!fenCheck(fen)) {
-            //res.status(400).send('error FEN');
+            res.status(400).send('error FEN');
+            return;
         }
+        */
 
         next();
+
     } catch(e) {
         res.status(400).send('error');
+        return;
     }
 }
 

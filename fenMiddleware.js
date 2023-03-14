@@ -1,12 +1,20 @@
 function fenMiddleware(req, res, next) {
     try {
         let fen = req.body.fen;
+        let depth = req.body.depth;
         const fenregex = /^([rnbqkpRNBQKP1-8]+\/){7}([rnbqkpRNBQKP1-8]+)\s[bw]\s(-|K?Q?k?q?)\s(-|[a-h][36])\s(0|[1-9][0-9]*)\s([1-9][0-9]*)/;
         if(!fen.match(fenregex)){
             res.status(400).send("Invalid fen string");
             return;
         }
+        if((typeof depth !== 'number') || (depth < 1) || (depth > 35)){
+            res.status(400).send("Invalid depth");
+            return;
+        }
 
+        next();
+
+        /*
         let fenCheck = 
         s => [...s].map(c =>                  // for each character 'c' in the FEN string 's':
         ++n % 9 ?                           //   if we haven't reached the end of a rank:
@@ -36,7 +44,6 @@ function fenMiddleware(req, res, next) {
         p > 8 |                             //   no more than 8 black pawns, including promotions?
         P > 8)                              //   no more than 8 white pawns, including promotions?
         
-        /*
         console.log(fenCheck(fen))
 
         if(!fenCheck(fen)) {
@@ -44,8 +51,6 @@ function fenMiddleware(req, res, next) {
             return;
         }
         */
-
-        next();
 
     } catch(e) {
         res.status(400).send('error');

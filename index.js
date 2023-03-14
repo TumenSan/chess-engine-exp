@@ -15,7 +15,6 @@ app.use(express.json()); // for parsing application/json
 app.use(express.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
 app.use(fenMiddleware);
 
-let depth = 20;
 
 app.get('/', (req, res) => {
   response.send('post body any fen in /estimation or /bestmove');
@@ -26,7 +25,8 @@ app.post('/', (req, res) => {
 });
 
 app.post('/estimation', (req, res) => {
-// if chess engine replies
+  let depth = req.body.depth;
+  // if chess engine replies
   engine.onmessage = function(msg) {
     console.log(msg);
     // in case the response has already been sent?
@@ -34,6 +34,7 @@ app.post('/estimation', (req, res) => {
         return;
     }
     // only send response when it is a recommendation
+
     //const regex = "/info.*score\s(cp\s-?\d+)/g";
     const regex = new RegExp(`^info depth ${depth} .* nodes \\d+ .*$`);
     if (typeof(msg == "string") && regex.test(msg) && !msg.includes("lowerbound") 
@@ -56,6 +57,7 @@ app.post('/estimation', (req, res) => {
 });
 
 app.post('/bestmove', (req, res) => {
+  let depth = req.body.depth;
 // if chess engine replies
   engine.onmessage = function(msg) {
     console.log(msg);
@@ -63,6 +65,7 @@ app.post('/bestmove', (req, res) => {
     if (res.headersSent) {
         return;
     }
+
     // only send response when it is a recommendation
     if (typeof(msg == "string") && msg.match("bestmove")) {
       let arr = fen.split(" ");

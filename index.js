@@ -18,7 +18,7 @@ async function connectQueue() {
 
         //amqp://localhost:5672
         //amqp://user1:password1@localhost:5672
-        connection = await amqp.connect("amqp://user1:password1@localhost:5672");
+        connection = await amqp.connect("amqp://user1:password1@rabbitmq:5672");
         channel = await connection.createChannel()
         
         // connect to 'test-queue', create one if doesnot exist already

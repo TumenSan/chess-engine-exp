@@ -36,8 +36,8 @@ const sendData = async (data) => {
 
 app.get("/send-msg", (req, res) => {
     const data = {
-        title: "Six of Crows",
-        author: "Leigh Burdugo"
+        fen: "r2qk2r/pbp1bppp/2pp1n2/8/1PB1P3/P1N5/2P2PPP/R1BQK2R b KQkq - 0 8",
+        depth: 10
     }
 
     sendData(data);

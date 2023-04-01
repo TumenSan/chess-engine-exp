@@ -9,30 +9,48 @@ app.use(express.json()); // for parsing application/json
 
 //брокер rabbitmq
 const amqp = require("amqplib");
+
 var channel, connection;
-var Answer;
 
 connectQueue() // call connectQueue function
+
 async function connectQueue() {
     try {
-
-        //amqp://localhost:5672
-        //amqp://user1:password1@localhost:5672
+        //connect to 'test-queue', create one if does not exist already
         connection = await amqp.connect("amqp://user1:password1@rabbitmq:5672");
-        channel = await connection.createChannel()
-        
-        // connect to 'test-queue', create one if doesnot exist already
-        await channel.assertQueue("test-queue")
+        channel = await connection.createConfirmChannel()
 
-        channel.consume("test-queue", data => {
-          // console.log(data)
-          let dataJson = JSON.parse(data.content.toString());
-          let est = estimation(dataJson);
-          console.log(est + '   !!!!!');
-          console.log(Answer + '   !!!123');
-          channel.ack(data);
-          //return(est);
-        })
+        await channel.assertQueue("back-to-engine", { durable: true });
+
+        console.log('Exchange "engine-to-back" and queue "back-to-engine" are created and binded');
+
+        channel.consume("back-to-engine", async (data) => {
+            try {
+                let dataJson = JSON.parse(data.content.toString());
+
+                let est = await estimation(dataJson);
+
+                // Create the response object with the request ID for correlation
+                const response = {
+                    answer: est,
+                    requestId: dataJson.requestId
+                };
+
+                // Publish the response to the exchange with the routing key of the request ID
+                await channel.sendToQueue("back-to-engine", Buffer.from(JSON.stringify(response)));
+
+                // Print information about the sent response
+                console.log("Response sent: " + JSON.stringify(response));
+
+                // Acknowledge the message as processed
+                channel.ack(data);
+            } catch (error) {
+                console.log("Error occurred: " + error.message);
+                // Reject the message and return it to the queue to be reprocessed
+                channel.nack(data);
+            }
+
+        }, { noAck: false });
         
     } catch (error) {
         console.log(error)
@@ -52,38 +70,39 @@ app.use(express.urlencoded({ extended: true })); // for parsing application/x-ww
 
 // estimation or bestmove
 
-function estimation(game){
+async function estimation(game){
   console.log(game)
 
   let depth = game.depth;
+  
+  return new Promise(function(resolve, reject) {
+    // if chess engine replies
+    engine.onmessage = function(msg) {
+      console.log(msg);
+      // only send response when it is a recommendation
 
-  // if chess engine replies
-  engine.onmessage = function(msg) {
-    console.log(msg);
-    // only send response when it is a recommendation
-
-    //const regex = "/info.*score\s(cp\s-?\d+)/g";
-    const regex = new RegExp(`^info depth ${depth} .* nodes \\d+ .*$`);
-    if (typeof(msg == "string") && regex.test(msg) && !msg.includes("lowerbound") 
-      && !msg.includes("upperbound")) {
-        let arr = fen.split(" ");
-        let color = "white move";
-        if(arr[1] == "w")
-          color = "white move";
-        else color = "black move";
-        let Conclusion = color + ' ' + msg;
-        console.log(Conclusion);
-        Answer = Conclusion;
-        return Conclusion;
+      //const regex = "/info.*score\s(cp\s-?\d+)/g";
+      const regex = new RegExp(`^info depth ${depth} .* nodes \\d+ .*$`);
+      if (typeof(msg == "string") && regex.test(msg) && !msg.includes("lowerbound") 
+        && !msg.includes("upperbound")) {
+          let arr = fen.split(" ");
+          let color = "white move";
+          if(arr[1] == "w")
+            color = "white move";
+          else color = "black move";
+          let Conclusion = color + ' ' + msg;
+          console.log(Conclusion);
+          resolve(Conclusion);
+      }
     }
-  }
-
-  let fen = game.fen;
-  // run chess engine
-  engine.postMessage("ucinewgame");
-  engine.postMessage("position fen " + fen);
-  engine.postMessage(`go depth ${depth}`);
-  //engine.postMessage("eval");//
+  
+    let fen = game.fen;
+    // run chess engine
+    engine.postMessage("ucinewgame");
+    engine.postMessage("position fen " + fen);
+    engine.postMessage(`go depth ${depth}`);
+    //engine.postMessage("eval");//
+  });
 }
 
 function bestmove(game){

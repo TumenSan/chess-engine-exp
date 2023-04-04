@@ -10,21 +10,23 @@ app.use(express.json()); // for parsing application/json
 //брокер rabbitmq
 const amqp = require("amqplib");
 
-var channel, connection;
+var channelConsumer, channelProducer, connection;
 
-connectQueue() // call connectQueue function
+connectQueue(); // call connectQueue function
 
 async function connectQueue() {
     try {
         //connect to 'test-queue', create one if does not exist already
         connection = await amqp.connect("amqp://user1:password1@rabbitmq:5672");
-        channel = await connection.createConfirmChannel()
+        channelConsumer = await connection.createConfirmChannel();
+        channelProducer = await connection.createConfirmChannel();
 
-        await channel.assertQueue("back-to-engine", { durable: true });
+        await channelConsumer.assertQueue("back-to-engine", { durable: true });
+        await channelProducer.assertQueue("engine-to-estimation", { durable: true });
 
-        console.log('Exchange "engine-to-back" and queue "back-to-engine" are created and binded');
+        console.log('"back-to-engine" and "engine-to-estimation" are created');
 
-        channel.consume("back-to-engine", async (data) => {
+        channelConsumer.consume("back-to-engine", async (data) => {
             try {
                 let dataJson = JSON.parse(data.content.toString());
 
@@ -37,17 +39,18 @@ async function connectQueue() {
                 };
 
                 // Publish the response to the exchange with the routing key of the request ID
-                await channel.sendToQueue("back-to-engine", Buffer.from(JSON.stringify(response)));
+                await channelConsumer.sendToQueue("back-to-engine", Buffer.from(JSON.stringify(response)));
+                await channelProducer.sendToQueue("engine-to-estimation", Buffer.from(JSON.stringify(response)));
 
                 // Print information about the sent response
                 console.log("Response sent: " + JSON.stringify(response));
 
                 // Acknowledge the message as processed
-                channel.ack(data);
+                channelConsumer.ack(data);
             } catch (error) {
                 console.log("Error occurred: " + error.message);
                 // Reject the message and return it to the queue to be reprocessed
-                channel.nack(data);
+                channelConsumer.nack(data);
             }
 
         }, { noAck: false });

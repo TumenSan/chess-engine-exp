@@ -30,6 +30,14 @@ async function connectQueue() {
             try {
                 let dataJson = JSON.parse(data.content.toString());
 
+                /*
+                if (dataJson.pgn) {
+                  let est = await estimationGame(dataJson);
+                } 
+                else 
+                  let est = await estimation(dataJson);
+                */
+
                 let est = await estimation(dataJson);
 
                 // Create the response object with the request ID for correlation
@@ -39,7 +47,7 @@ async function connectQueue() {
                 };
 
                 // Publish the response to the exchange with the routing key of the request ID
-                await channelConsumer.sendToQueue("back-to-engine", Buffer.from(JSON.stringify(response)));
+                //await channelConsumer.sendToQueue("back-to-engine", Buffer.from(JSON.stringify(response)));
                 await channelProducer.sendToQueue("engine-to-estimation", Buffer.from(JSON.stringify(response)));
 
                 // Print information about the sent response

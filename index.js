@@ -17,7 +17,7 @@ connectQueue(); // call connectQueue function
 async function connectQueue() {
     try {
         //connect to 'test-queue', create one if does not exist already
-        connection = await amqp.connect("amqp://user1:password1@rabbitmq:5672");
+        connection = await amqp.connect("amqp://user1:password1@localhost:5672");
         channelConsumer = await connection.createConfirmChannel();
         channelProducer = await connection.createConfirmChannel();
 
@@ -43,7 +43,10 @@ async function connectQueue() {
                 // Create the response object with the request ID for correlation
                 const response = {
                     fen: dataJson.fen,
-                    answer: est,
+                    answerBestMove: est.ConclusionBestMove,
+                    answerMove: est.ConclusionMove,
+                    answerNewFen: est.ConclusionNewFen,
+                    answerEstimate: est.ConclusionEstimate,
                     requestId: dataJson.requestId
                 };
 
@@ -401,6 +404,13 @@ function generateFEN(pos) {
     return s;
 }
 
+function chessToCoords(chessPos) {
+    const chessToIndex = {a: 0, b: 1, c: 2, d: 3, e: 4, f: 5, g: 6, h: 7};
+    const col = chessToIndex[chessPos[0]];
+    const row = 8 - parseInt(chessPos[1]);
+    return { x: col, y: row };
+}
+
 async function estimation(game){
   console.log(game)
 
@@ -416,28 +426,61 @@ async function estimation(game){
       const regex = new RegExp(`^info depth ${depth} .* nodes \\d+ .*$`);
       if (typeof(msg == "string") && regex.test(msg) && !msg.includes("lowerbound") 
         && !msg.includes("upperbound")) {
-          var pos = parseFEN(fen);
-          var move = parseMove(pos, "Nf3"); //!!!
-          if (move == null) {
-              console.log("error");
+          let patternMove = /time\s+\d+\s+pv\s+(\S+)/; // создаем регулярное выражение
+          let match1 = msg.match(patternMove); // ищем совпадения
+
+          let result;
+          if (match1 && match1.length > 1) {
+              result = match1[1]; // получаем первое слово после "time <число> pv"
+              console.log(result); // выводим результат в консоль
           }
-          pos = doMove(pos, move.from, move.to, move.p);
+
+          let patternCoord = /^([a-h][1-8])([a-h][1-8])([NBRQ])?$/; // создаем регулярное выражение
+          let match2 = result.match(patternCoord); // ищем совпадения
+
+          let firstCoord;
+          let secondCoord;
+          let thirdPromotion;
+          if (match2 && match2.length > 1) {
+              firstCoord = match2[1]; // первая координата
+              secondCoord = match2[2]; // вторая координата
+              thirdPromotion = match2[3]; // знак превращения фигуры (если есть)
+              if (thirdPromotion) {
+                  console.log(firstCoord, secondCoord, thirdPromotion); // выводим результат в консоль
+              } else {
+                  console.log(firstCoord, secondCoord); // выводим результат в консоль
+              }
+          }
+
+          var pos = parseFEN(fen);
+          console.log(firstCoord, secondCoord);
+          firstCoord = chessToCoords(firstCoord);
+          secondCoord = chessToCoords(secondCoord);
+          if (thirdPromotion) pos = doMove(pos, firstCoord, secondCoord, thirdPromotion);
+          else pos = doMove(pos, firstCoord, secondCoord, null);
           let fen2 = generateFEN(pos);
           console.log(fen2);
-          pos = parseFEN(fen2);
-          move = parseMove(pos, "Nc6"); //!!!
-          if (move == null) {
-              console.log("error");
-          }
-          pos = doMove(pos, move.from, move.to, move.p);
-          console.log(generateFEN(pos));
+
+          let match3 = msg.match(/cp (-?\d+)/);
+          //console.log("match3", match3)
+          let scoreCp = parseInt(match3[1]);
+          //let scoreCp = 0.98; //info depth 10 seldepth 2 multipv 1 score mate 1 nodes 290 nps 1203 time 241 pv c6d4 bmc 0.00263885
+          scoreCp = Number(scoreCp) / 100;
 
           let arr = fen.split(" ");
           let color = "white move";
           if(arr[1] == "w")
             color = "white move";
-          else color = "black move";
-          let Conclusion = color + ' ' + msg;
+          else {
+              color = "black move"; scoreCp = -1 * scoreCp
+          }
+          let Conclusion =
+          {
+              ConclusionBestMove: color + ' ' + msg,
+              ConclusionMove: result,
+              ConclusionNewFen: fen2,
+              ConclusionEstimate: scoreCp
+          }
           console.log(Conclusion);
           resolve(Conclusion);
       }

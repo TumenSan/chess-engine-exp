@@ -30,25 +30,31 @@ async function connectQueue() {
             try {
                 let dataJson = JSON.parse(data.content.toString());
 
-                /*
+                let response;
+                let est;
                 if (dataJson.pgn) {
-                  let est = await estimationGame(dataJson);
+                  est = await estimationPgn(dataJson);
+
+                    // Create the response object with the request ID for correlation
+                    response = {
+                        pgn: dataJson.pgn,
+                        conclusion: est,
+                        requestId: dataJson.requestId
+                    };
                 } 
-                else 
-                  let est = await estimation(dataJson);
-                */
+                else {
+                    est = await estimation(dataJson);
 
-                let est = await estimation(dataJson);
-
-                // Create the response object with the request ID for correlation
-                const response = {
-                    fen: dataJson.fen,
-                    answerBestMove: est.ConclusionBestMove,
-                    answerMove: est.ConclusionMove,
-                    answerNewFen: est.ConclusionNewFen,
-                    answerEstimate: est.ConclusionEstimate,
-                    requestId: dataJson.requestId
-                };
+                    // Create the response object with the request ID for correlation
+                    response = {
+                        fen: dataJson.fen,
+                        answerBestMove: est.ConclusionBestMove,
+                        answerMove: est.ConclusionMove,
+                        answerNewFen: est.ConclusionNewFen,
+                        answerEstimate: est.ConclusionEstimate,
+                        requestId: dataJson.requestId
+                    };
+                }
 
                 // Publish the response to the exchange with the routing key of the request ID
                 //await channelConsumer.sendToQueue("back-to-engine", Buffer.from(JSON.stringify(response)));
@@ -412,12 +418,13 @@ function chessToCoords(chessPos) {
 }
 
 async function estimation(game){
-  console.log(game)
+  console.log(game);
 
   let depth = game.depth;
   
   return new Promise(function(resolve, reject) {
     // if chess engine replies
+    let Conclusion;
     engine.onmessage = function(msg) {
       console.log(msg);
       // only send response when it is a recommendation
@@ -452,7 +459,7 @@ async function estimation(game){
               }
           }
 
-          var pos = parseFEN(fen);
+          let pos = parseFEN(fen);
           console.log(firstCoord, secondCoord);
           firstCoord = chessToCoords(firstCoord);
           secondCoord = chessToCoords(secondCoord);
@@ -474,15 +481,24 @@ async function estimation(game){
           else {
               color = "black move"; scoreCp = -1 * scoreCp
           }
-          let Conclusion =
+          let s = color + ' ' + msg;
+          Conclusion =
           {
-              ConclusionBestMove: color + ' ' + msg,
+              ConclusionBestMove: s,
               ConclusionMove: result,
               ConclusionNewFen: fen2,
               ConclusionEstimate: scoreCp
           }
-          console.log(Conclusion);
-          resolve(Conclusion);
+
+      } else {
+          const regex2 = /bestmove\s\w\d\w\d\sponder\s\w\d\w\d/;
+          let match2 = msg.match(regex2);
+
+          if (match2) {
+              console.log("match: ", match2);
+              console.log("Conclusion: ", Conclusion);
+              resolve(Conclusion);
+          }
       }
     }
   
@@ -495,43 +511,32 @@ async function estimation(game){
   });
 }
 
-function bestmove(game){
-  console.log(game)
+async function estimationPgn(game){
+    console.log(game);
 
-  let depth = game.depth;
+    let depth = game.depth;
+    let pgn = game.pgn;
+    let fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    game.fen = fen;
 
-  // if chess engine replies
-  engine.onmessage = function(msg) {
-    console.log(msg);
-    // only send response when it is a recommendation
+    const regex = /\d+\.\s|\s/g;
+    const moves = pgn.split(regex).filter(move => move !== "");
+    console.log("moves: ", moves, " ", moves.length);
 
-    //const regex = "/info.*score\s(cp\s-?\d+)/g";
-    const regex = new RegExp(`^info depth ${depth} .* nodes \\d+ .*$`);
-    if (typeof(msg == "string") && regex.test(msg) && !msg.includes("lowerbound") 
-      && !msg.includes("upperbound")) {
-        let arr = fen.split(" ");
-        let color = "white move";
-        if(arr[1] == "w")
-          color = "white move";
-        else color = "black move";
-        return(`${color} ${msg}`);
+    let ConclusionArr = [];
+
+    for (let i = 0; i < moves.length; i++){
+        let Conclusion = await estimation(game);
+        ConclusionArr.push(Conclusion);
+        let pos = parseFEN(game.fen);
+        let move = parseMove(pos, moves[i]);
+        if (move.p) pos = doMove(pos, move.from, move.to, move.p);
+        else pos = doMove(pos, move.from, move.to, null);
+        game.fen = generateFEN(pos);
     }
-    if (typeof(msg == "string") && msg.match("bestmove")) {
-      let arr = fen.split(" ");
-      let color = "white move";
-      if(arr[1] == "w")
-        color = "white move";
-      else color = "black move";
-      return(`${color} ${msg}`);
-    }
-  }
 
-  let fen = game.fen;
-  // run chess engine
-  engine.postMessage("ucinewgame");
-  engine.postMessage("position fen " + fen);
-  engine.postMessage(`go depth ${depth}`);
-  //engine.postMessage("eval");//
+    console.log("ConclusionArr: ", ConclusionArr);
+    return (ConclusionArr);
 }
 
 app.listen(port, (err) => {

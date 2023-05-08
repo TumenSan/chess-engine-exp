@@ -2,7 +2,10 @@ const express = require('express')
 const app = express()
 const port = 6000
 const stockfish = require("stockfish");
+require("dotenv").config();
+const mongoose = require("mongoose");
 const engine = stockfish();
+const engineAnalysisModel = require("./models/engineAnalysisModel");
 const fenMiddleware = require("./fenMiddleware");
 
 app.use(express.json()); // for parsing application/json
@@ -10,8 +13,17 @@ app.use(express.json()); // for parsing application/json
 //брокер rabbitmq
 const amqp = require("amqplib");
 
+async function connectDatabase() {
+    await mongoose.connect(process.env.DB_URL, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+    });
+    console.log("DB connected");
+}
+
 var channelConsumer, channelProducer, connection;
 
+connectDatabase(); //connect DB
 connectQueue(); // call connectQueue function
 
 async function connectQueue() {
@@ -39,8 +51,12 @@ async function connectQueue() {
                     response = {
                         pgn: dataJson.pgn,
                         conclusion: est,
-                        requestId: dataJson.requestId
+                        idGame: dataJson._id
                     };
+
+                    let conclusionString = JSON.stringify(response.conclusion);
+                    let game = await engineAnalysisModel.create({ game: response.idGame, gameAnalysis: conclusionString });
+                    console.log("any game: ", game);
                 } 
                 else {
                     est = await estimation(dataJson);

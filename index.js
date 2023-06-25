@@ -29,7 +29,7 @@ connectQueue(); // call connectQueue function
 async function connectQueue() {
     try {
         //connect to 'test-queue', create one if does not exist already
-        connection = await amqp.connect("amqp://user1:password1@localhost:5672");
+        connection = await amqp.connect("amqp://user1:password1@rabbitmq:5672");
         channelConsumer = await connection.createConfirmChannel();
         channelProducer = await connection.createConfirmChannel();
 
@@ -51,12 +51,20 @@ async function connectQueue() {
                     response = {
                         pgn: dataJson.pgn,
                         conclusion: est,
+                        userId: dataJson.userId,
                         idGame: dataJson._id
                     };
 
-                    let conclusionString = JSON.stringify(response.conclusion);
-                    let game = await engineAnalysisModel.create({ game: response.idGame, gameAnalysis: conclusionString });
-                    console.log("any game: ", game);
+                    if(dataJson._id){
+                        let conclusionString = JSON.stringify(response.conclusion);
+                        let game = await engineAnalysisModel.create({ game: response.idGame, gameAnalysis: conclusionString });
+                        console.log("any game: ", game);
+                    }
+                    else{
+                        let conclusionString = JSON.stringify(response.conclusion);
+                        let game = await engineAnalysisModel.create({ user: response.userId, gameAnalysis: conclusionString });
+                        console.log("any game: ", game);
+                    }
                 } 
                 else {
                     est = await estimation(dataJson);
